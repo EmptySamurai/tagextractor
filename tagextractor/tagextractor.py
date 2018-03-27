@@ -5,7 +5,7 @@ from scipy.sparse import find
 
 def get_tags(texts, n_tags, vectorizer=None, batchsize=8192):
     n_texts = len(texts)
-    vectorizer = vectorizer or TfidfVectorizer()
+    vectorizer = vectorizer or TfidfVectorizer(norm='l2')
 
     pred_tags = []
     for _ in range(n_texts):

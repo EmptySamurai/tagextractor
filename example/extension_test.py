@@ -12,7 +12,7 @@ def f1(y, y_pred):
     fp = 0
     fn = 0
     
-    for i in range(y.shape[0]):
+    for i in range(len(y)):
         yi = y[i] # it is a list
         ypi = y_pred[i] # it is a list
                 
@@ -46,18 +46,16 @@ texts = []
 for i, row in df.iterrows():
     words = str(row.title) + ' ' + str(row.content)
     texts.append(words)
-texts=np.array(texts)
 
 true_tags = []
 for index, row in df.iterrows():
     true_tags.append(row["tags"].split())    
-true_tags=np.array(true_tags)
 
 
 print("Start time: {0}".format(time.ctime()))
 print()
 
-vectorizer = TfidfVectorizer(ngram_range=(1, 2), stop_words='english', max_df=0.1)
+vectorizer = TfidfVectorizer(ngram_range=(1, 2), stop_words='english', max_df=0.1, norm='l2')
 pred_tags = get_tags(texts, N_TAGS, vectorizer=vectorizer)
 
 print("Finish time: {0}".format(time.ctime()))
