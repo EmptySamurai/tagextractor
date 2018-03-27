@@ -1,0 +1,1 @@
+from .tagextractor import get_tags
