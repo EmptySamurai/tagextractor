@@ -29,23 +29,57 @@ bool operator<(const Tag &lhs, const Tag &rhs)
     return lhs.probability < rhs.probability;
 }
 
-void getTagsIndices(SparseMatrix<datatype, RowMajor> &tfidfMatrix, int nTags, vector<vector<int>> &result, int batchsize)
+void getTagsIndicesWithHighestProbability(vector<datatype> &featureVector, priority_queue<Tag> &q, int nTags, vector<int> &out)
 {
 
+    for (int i = 0; i < featureVector.size(); i++)
+    {
+        if (featureVector[i] > 0)
+        {
+            if (q.size() < nTags)
+                q.push({-featureVector[i], i});
+            else if (q.top().probability > -featureVector[i])
+            {
+                q.pop();
+                q.push({-featureVector[i], i});
+            }
+        }
+    }
+
+    for (int i = 0, k = q.size(); i < k; i++)
+    {
+        out.push_back(q.top().index);
+        q.pop();
+    }
+}
+
+void fillFeatureVector(SparseMatrix<datatype, RowMajor> &tfidfMatrix, Matrix<datatype, Dynamic, Dynamic> &similarityMatrix, int row, vector<datatype> &featureVector)
+{
+    fill(featureVector.begin(), featureVector.end(), 0.0);
+    for (int i = 0; i < tfidfMatrix.rows(); i++)
+    {
+        datatype similarityValue = similarityMatrix(row, i);
+        for (SparseMatrix<datatype, RowMajor>::InnerIterator it(tfidfMatrix, i); it; ++it)
+        {
+            featureVector[it.col()] += similarityValue * it.value();
+        }
+    }
+}
+
+void getTagsIndices(SparseMatrix<datatype, RowMajor> &tfidfMatrix, int nTags, vector<vector<int>> &result, int batchsize)
+{
     int nDocs = tfidfMatrix.rows();
     int nTerms = tfidfMatrix.cols();
 
     int nPrecomputedRows = min(nDocs, batchsize);
-
     int nBatches = nDocs / nPrecomputedRows;
-
     if (nDocs % nPrecomputedRows != 0)
     {
         nBatches++;
     }
 
-    priority_queue<Tag> q;
     vector<datatype> featureVector(nTerms);
+    priority_queue<Tag> q;
 
     for (int b = 0; b < nBatches; b++)
     {
@@ -62,36 +96,8 @@ void getTagsIndices(SparseMatrix<datatype, RowMajor> &tfidfMatrix, int nTags, ve
         for (int r = 0; r < nRows; r++)
         {
             int rowIndex = r + start;
-
-            fill(featureVector.begin(), featureVector.end(), 0.0);
-            for (int j = 0; j < nDocs; j++)
-            {
-                datatype similarityValue = similarityMatrix(r, j);
-                for (SparseMatrix<datatype, RowMajor>::InnerIterator it(tfidfMatrix, j); it; ++it)
-                {
-                    featureVector[it.col()] += similarityValue * it.value();
-                }
-            }
-
-            for (int j = 0; j < nTerms; j++)
-            {
-                if (featureVector[j] > 0)
-                {
-                    if (q.size() < nTags)
-                        q.push({.probability = -featureVector[j], .index = j});
-                    else if (q.top().probability > -featureVector[j])
-                    {
-                        q.pop();
-                        q.push({.probability = -featureVector[j], .index = j});
-                    }
-                }
-            }
-
-            for (int j = 0, k = q.size(); j < k; j++)
-            {
-                result[rowIndex].push_back(q.top().index);
-                q.pop();
-            }
+            fillFeatureVector(tfidfMatrix, similarityMatrix, r, featureVector);
+            getTagsIndicesWithHighestProbability(featureVector, q, nTags, result[rowIndex]);
         }
     }
 }
