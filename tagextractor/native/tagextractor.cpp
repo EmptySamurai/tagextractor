@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include <queue>
 #include <vector>
+#include <algorithm>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
@@ -18,38 +19,27 @@ typedef float datatype;
 using namespace std;
 namespace py = pybind11;
 
-typedef struct Tag
-{
-    datatype probability;
-    int index;
-} Tag;
 
-bool operator<(const Tag &lhs, const Tag &rhs)
-{
-    return lhs.probability < rhs.probability;
-}
+template <class T>
+struct IndicesCompare{
+    IndicesCompare( const vector<T>& v ) : _v(v) {}
+    bool operator ()(int a, int b) { return _v[a] > _v[b]; }
+    const vector<T>& _v;
+};
 
-void getTagsIndicesWithHighestProbability(vector<datatype> &featureVector, priority_queue<Tag> &q, int nTags, vector<int> &out)
+void getTagsIndicesWithHighestProbability(vector<datatype> &featureVector, vector<int> &indices, int nTags, vector<int> &out)
 {
+    partial_sort(indices.begin(), indices.begin()+nTags, indices.end(), IndicesCompare<datatype>(featureVector));
+    
+    out.reserve(nTags);
 
-    for (int i = 0; i < featureVector.size(); i++)
-    {
-        if (featureVector[i] > 0)
-        {
-            if (q.size() < nTags)
-                q.push({-featureVector[i], i});
-            else if (q.top().probability > -featureVector[i])
-            {
-                q.pop();
-                q.push({-featureVector[i], i});
-            }
+    for (auto i=0; i<nTags; i++) {
+        auto ind = indices[i];
+        if (featureVector[ind] != 0) {
+            out.push_back(ind);
+        } else {
+            break;
         }
-    }
-
-    for (int i = 0, k = q.size(); i < k; i++)
-    {
-        out.push_back(q.top().index);
-        q.pop();
     }
 }
 
@@ -79,7 +69,8 @@ void getTagsIndices(SparseMatrix<datatype, RowMajor> &tfidfMatrix, int nTags, ve
     }
 
     vector<datatype> featureVector(nTerms);
-    priority_queue<Tag> q;
+    vector<int> indices(nTerms);
+    iota(indices.begin(), indices.end(), 0);
 
     for (int b = 0; b < nBatches; b++)
     {
@@ -93,12 +84,12 @@ void getTagsIndices(SparseMatrix<datatype, RowMajor> &tfidfMatrix, int nTags, ve
         Matrix<datatype, Dynamic, Dynamic> similarityMatrix(similaritySparse);
         similaritySparse.resize(0, 0);
 
-        #pragma omp parallel for firstprivate(featureVector, q)
+        #pragma omp parallel for firstprivate(featureVector, indices)
         for (int r = 0; r < nRows; r++)
         {
             int rowIndex = r + start;
             fillFeatureVector(tfidfMatrix, similarityMatrix, r, featureVector);
-            getTagsIndicesWithHighestProbability(featureVector, q, nTags, result[rowIndex]);
+            getTagsIndicesWithHighestProbability(featureVector, indices, nTags, result[rowIndex]);
         }
     }
 }
@@ -110,6 +101,7 @@ vector<vector<int>> getTagsIndicesInterface(indices_arr rows, indices_arr column
                                      int nDocs, int nTerms, int nTags,
                                      int batchsize)
 {
+    nTags = min(nTags, nTerms);
 
     auto rowsInfo = rows.request();
     auto columnsInfo = columns.request();
