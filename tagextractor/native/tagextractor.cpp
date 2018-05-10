@@ -93,6 +93,7 @@ void getTagsIndices(SparseMatrix<datatype, RowMajor> &tfidfMatrix, int nTags, ve
         Matrix<datatype, Dynamic, Dynamic> similarityMatrix(similaritySparse);
         similaritySparse.resize(0, 0);
 
+        #pragma omp parallel for firstprivate(featureVector, q)
         for (int r = 0; r < nRows; r++)
         {
             int rowIndex = r + start;
@@ -105,7 +106,7 @@ void getTagsIndices(SparseMatrix<datatype, RowMajor> &tfidfMatrix, int nTags, ve
 typedef py::array_t<int, py::array::c_style | py::array::forcecast> indices_arr;
 typedef py::array_t<datatype, py::array::c_style | py::array::forcecast> values_arr;
 
-vector<vector<int>> get_tags_indices(indices_arr rows, indices_arr columns, values_arr values,
+vector<vector<int>> getTagsIndicesInterface(indices_arr rows, indices_arr columns, values_arr values,
                                      int nDocs, int nTerms, int nTags,
                                      int batchsize)
 {
@@ -144,5 +145,5 @@ PYBIND11_MODULE(native, m)
 {
     m.doc() = "Tagextractor native code"; // optional module docstring
 
-    m.def("get_tags_indices", &get_tags_indices, "A function to get indices of tags");
+    m.def("get_tags_indices", &getTagsIndicesInterface, "A function to get indices of tags");
 }
